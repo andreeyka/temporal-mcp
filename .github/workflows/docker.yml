@@ -97,6 +97,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
           IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           TAG_NAME: ${{ github.ref_name }}
           VERSION: ${{ steps.release.outputs.version }}
