@@ -30,6 +30,7 @@ _EXEC_COLUMNS = (
 )
 _EVENT_COLUMNS = ("event_id", "event_time", "event_type", "reason", "activity_type", "activity_id")
 _FAILURE_COLUMNS = ("event_id", "type", "message", "stack_trace")
+_PAYLOAD_COLUMNS = ("event_id", "event_type", "payload")
 _GROUP_COLUMNS = ("count", "values")
 _EXEC_SPEC = RenderSpec(title="Workflows", columns=_EXEC_COLUMNS)
 
@@ -61,6 +62,9 @@ def history(payload: dict[str, object]) -> str:
     failures = _failure_rows(events)
     if failures:
         parts.append(md.dict_table(failures, "Failures", columns=_FAILURE_COLUMNS))
+    payloads = _payload_rows(events)
+    if payloads:
+        parts.append(md.dict_table(payloads, "Payloads", columns=_PAYLOAD_COLUMNS))
     return md.sections(parts)
 
 
@@ -92,4 +96,16 @@ def _failure_rows(events: list[dict[str, Any]]) -> list[dict[str, object]]:
         failure = event.get("failure")
         if isinstance(failure, dict):
             rows.append({"event_id": event.get("event_id"), **failure})
+    return rows
+
+
+def _payload_rows(events: list[dict[str, Any]]) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for event in events:
+        payloads = event.get("payloads")
+        if isinstance(payloads, list):
+            rows.extend(
+                {"event_id": event.get("event_id"), "event_type": event.get("event_type"), "payload": payload}
+                for payload in payloads
+            )
     return rows

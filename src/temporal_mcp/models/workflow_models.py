@@ -52,7 +52,14 @@ class ExecutionDetail(ExecutionSummary):
 
 
 class HistoryEventModel(BaseModel):
-    """A single, compacted history event."""
+    """A single, compacted history event.
+
+    Note: `payloads` carries decoded workflow/activity input or result data
+    produced by application code. It may contain application-domain sensitive
+    data (e.g. business identifiers, PII, or secrets). It is populated only when
+    explicitly requested; treat it accordingly when logging, storing, or
+    forwarding this model.
+    """
 
     model_config = ConfigDict(extra="ignore")
 
@@ -67,3 +74,7 @@ class HistoryEventModel(BaseModel):
         None
     )
     activity_id: Annotated[str | None, Field(description="Activity ID associated with the event, if any.")] = None
+    payloads: Annotated[
+        list[str] | None,
+        Field(description="Decoded event payloads (workflow/activity input or result), if requested."),
+    ] = None

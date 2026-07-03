@@ -15,6 +15,14 @@ _FAILURE_ATTRS = (
     "workflow_execution_terminated_event_attributes",
     "workflow_execution_timed_out_event_attributes",
 )
+_PAYLOAD_ATTRS = {
+    "workflow_execution_started_event_attributes": "input",
+    "workflow_execution_completed_event_attributes": "result",
+    "activity_task_scheduled_event_attributes": "input",
+    "activity_task_completed_event_attributes": "result",
+}
+_PAYLOAD_MAX_CHARS = 2000
+_TRUNCATED_MARKER = "...[truncated]"
 _SCHEDULED_ATTR = "activity_task_scheduled_event_attributes"
 _ACTIVITY_ATTRS = (
     _SCHEDULED_ATTR,
@@ -114,7 +122,27 @@ def _correlated_identity(
     return identities.get(getattr(attrs, "scheduled_event_id", 0), (None, None))
 
 
-def _history_event(event: object, identities: dict[int, tuple[str | None, str | None]]) -> HistoryEventModel:
+def _truncate_payload(text: str) -> str:
+    """Cap payload text length with a truncation marker."""
+    if len(text) <= _PAYLOAD_MAX_CHARS:
+        return text
+    return text[:_PAYLOAD_MAX_CHARS] + _TRUNCATED_MARKER
+
+
+def _event_payloads(event: Any, *, include_payloads: bool) -> list[str] | None:  # noqa: ANN401
+    """Decode workflow/activity input or result payloads for an event."""
+    if not include_payloads:
+        return None
+    for attr, field in _PAYLOAD_ATTRS.items():
+        if event.HasField(attr):
+            container = getattr(getattr(event, attr), field)
+            return [_truncate_payload(bytes_value_text(p)) for p in container.payloads] or None
+    return None
+
+
+def _history_event(
+    event: object, identities: dict[int, tuple[str | None, str | None]], *, include_payloads: bool
+) -> HistoryEventModel:
     """Build one HistoryEventModel from a raw history event."""
     history_event = cast("Any", event)
     failure, reason = _failure_and_reason(history_event)
@@ -129,6 +157,7 @@ def _history_event(event: object, identities: dict[int, tuple[str | None, str | 
         reason=reason,
         activity_type=activity_type,
         activity_id=activity_id,
+        payloads=_event_payloads(history_event, include_payloads=include_payloads),
     )
 
 
@@ -151,11 +180,11 @@ def _activity_for_event(
     return _correlated_identity(attrs, identities)
 
 
-def history_events(raw: object) -> list[HistoryEventModel]:
+def history_events(raw: object, *, include_payloads: bool = False) -> list[HistoryEventModel]:
     """Build a compact, failure-focused list of history events."""
     events = list(cast("Any", raw).events)
     identities = _scheduled_activity_identities(events)
-    return [_history_event(event, identities) for event in events]
+    return [_history_event(event, identities, include_payloads=include_payloads) for event in events]
 
 
 def cluster_info(raw: object) -> ClusterInfo:

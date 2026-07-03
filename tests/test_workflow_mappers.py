@@ -218,6 +218,80 @@ def test_history_events_correlate_real_failed_activity_identity() -> None:
     assert event.failure is not None
 
 
+def _payload_history(attr_name: str, field: str, event_type: str, datas: list[bytes]) -> SimpleNamespace:
+    container = SimpleNamespace(**{field: SimpleNamespace(payloads=[SimpleNamespace(data=d) for d in datas])})
+    event = _FakeHistoryEvent(1, event_type, attr_name, container)
+    return SimpleNamespace(events=[event])
+
+
+def test_history_events_include_started_input_payloads() -> None:
+    history = _payload_history(
+        "workflow_execution_started_event_attributes",
+        "input",
+        "EVENT_TYPE_WORKFLOW_EXECUTION_STARTED",
+        [b'{"a": 1}', b'"x"'],
+    )
+
+    event = workflow_mapper.history_events(history, include_payloads=True)[0]
+
+    assert event.payloads == ['{"a": 1}', '"x"']
+
+
+def test_history_events_include_activity_result_payloads() -> None:
+    history = _payload_history(
+        "activity_task_completed_event_attributes",
+        "result",
+        "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
+        [b'{"ok": true}'],
+    )
+
+    event = workflow_mapper.history_events(history, include_payloads=True)[0]
+
+    assert event.payloads == ['{"ok": true}']
+
+
+def test_history_events_payloads_absent_by_default() -> None:
+    history = _payload_history(
+        "workflow_execution_started_event_attributes",
+        "input",
+        "EVENT_TYPE_WORKFLOW_EXECUTION_STARTED",
+        [b'{"a": 1}'],
+    )
+
+    event = workflow_mapper.history_events(history)[0]
+
+    assert event.payloads is None
+
+
+def test_history_events_payloads_truncated_with_marker() -> None:
+    big = b"x" * (workflow_mapper._PAYLOAD_MAX_CHARS + 500)
+    history = _payload_history(
+        "workflow_execution_completed_event_attributes",
+        "result",
+        "EVENT_TYPE_WORKFLOW_EXECUTION_COMPLETED",
+        [big],
+    )
+
+    payload = workflow_mapper.history_events(history, include_payloads=True)[0].payloads
+
+    assert payload is not None
+    assert len(payload[0]) == workflow_mapper._PAYLOAD_MAX_CHARS + len(workflow_mapper._TRUNCATED_MARKER)
+    assert payload[0].endswith(workflow_mapper._TRUNCATED_MARKER)
+
+
+def test_history_events_payloads_none_when_empty() -> None:
+    history = _payload_history(
+        "activity_task_scheduled_event_attributes",
+        "input",
+        "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+        [],
+    )
+
+    event = workflow_mapper.history_events(history, include_payloads=True)[0]
+
+    assert event.payloads is None
+
+
 class _FakeCapabilities:
     signal_and_query_header = True
     internal_error_differentiation = False

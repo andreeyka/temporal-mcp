@@ -70,6 +70,30 @@ def test_history_renders_failure_details() -> None:
     assert "line 1 line 2" in text
 
 
+def test_history_renders_payloads_section_when_present() -> None:
+    event = HistoryEventModel(
+        event_id=5,
+        event_type="EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
+        activity_type="ChargeCard",
+        payloads=['{"amount": 10}'],
+    )
+    payload = {"namespace": "default", "workflow_id": "wf-1", "run_id": None, "events": [event.model_dump()]}
+
+    text = workflow_renderer.history(payload)
+
+    assert "## Payloads" in text
+    assert '{"amount": 10}' in text
+
+
+def test_history_omits_payloads_section_when_absent() -> None:
+    event = HistoryEventModel(event_id=5, event_type="EVENT_TYPE_ACTIVITY_TASK_SCHEDULED", activity_type="ChargeCard")
+    payload = {"namespace": "default", "workflow_id": "wf-1", "run_id": None, "events": [event.model_dump()]}
+
+    text = workflow_renderer.history(payload)
+
+    assert "## Payloads" not in text
+
+
 def test_history_renders_empty_events_section() -> None:
     payload = {"namespace": "default", "workflow_id": "wf-1", "run_id": None, "events": []}
 

@@ -100,6 +100,9 @@ async def get_workflow_history(
     workflow_id: WorkflowId,
     run_id: RunId = None,
     *,
+    include_payloads: Annotated[
+        bool, Field(description="Include decoded event payloads (input/result). May expose sensitive data.")
+    ] = False,
     structured_content: StructuredContent = False,
     workflow_service: TemporalWorkflowService = TemporalWorkflowServiceProvider,
 ) -> ToolResult:
@@ -109,6 +112,7 @@ async def get_workflow_history(
         namespace: Target namespace.
         workflow_id: Workflow id.
         run_id: Optional run id.
+        include_payloads: Include decoded workflow/activity input and result payloads.
         structured_content: Return structured content for programmatic use.
         workflow_service: Workflow service (injected).
 
@@ -116,7 +120,7 @@ async def get_workflow_history(
         ToolResult with the event list as Markdown text and optional structured content.
     """
     hist = await workflow_service.get_workflow_history(namespace, workflow_id, run_id)
-    events = workflow_mapper.history_events(hist)
+    events = workflow_mapper.history_events(hist, include_payloads=include_payloads)
     payload = {
         "namespace": namespace,
         "workflow_id": workflow_id,

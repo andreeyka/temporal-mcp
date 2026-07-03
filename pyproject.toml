@@ -1,6 +1,6 @@
 [project]
 name = "temporal-multi-namespace-mcp"
-version = "0.1.1"
+version = "0.1.2"
 description = "Multi-namespace Temporal MCP server (FastMCP 3) — analyze workflows and failures across all namespaces"
 readme = "README.md"
 requires-python = ">=3.12"
