@@ -1,0 +1,86 @@
+[project]
+name = "temporal-multi-namespace-mcp"
+version = "0.1.0"
+description = "Multi-namespace Temporal MCP server (FastMCP 3) — analyze workflows and failures across all namespaces"
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [{ name = "Andrey Shlyapin", email = "avshlyapin@cloud.ru" }]
+license = "MIT"
+dependencies = [
+    "fastmcp>=3.4.0",
+    "temporalio>=1.29.0",
+    "httpx>=0.27.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "truststore>=0.9.0",
+]
+
+[project.scripts]
+temporal-mcp = "temporal_mcp.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/temporal_mcp"]
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+default = true
+
+[tool.ty.environment]
+python-version = "3.12"
+
+[tool.ty.src]
+exclude = [".venv", "tests"]
+
+[tool.ty.terminal]
+error-on-warning = true
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+extend-exclude = ["__init__.py"]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "D100", "D104", "D105", "D107",
+    "RUF001", "RUF002", "RUF003",
+    "COM812", "CPY001", "BLE001",
+    "PLR0912", "PLR0913", "PLR0915", "TRY400",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = [
+    "S101", "SLF001", "PLR2004", "ANN", "D", "PLC0415",
+    "EM101", "EM102", "EM103", "TRY003", "S105", "S106",
+    "ARG001", "ARG002", "E501",
+]
+"src/temporal_mcp/enums.py" = ["UP042"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.isort]
+lines-after-imports = 2
+combine-as-imports = true
+split-on-trailing-comma = false
+
+[tool.ruff.lint.flake8-annotations]
+allow-star-arg-any = true
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.12.9",
+    "pytest>=8.0.0",
+    "ty>=0.0.56",
+]
