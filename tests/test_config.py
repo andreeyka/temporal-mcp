@@ -65,6 +65,14 @@ def test_auth_require_audience_env_override(monkeypatch):
     assert McpServerConfig().auth_require_audience is False
 
 
+def test_auth_claim_expr_env_override(monkeypatch):
+    raw_expression = '"Example-Admins" in groups'
+    monkeypatch.setenv("MCP_AUTH_CLAIM_EXPR", raw_expression)
+    from temporal_mcp.config import McpServerConfig
+
+    assert McpServerConfig().auth_claim_expr == raw_expression
+
+
 def test_idp_derives_endpoints_from_issuer(monkeypatch):
     for var in list(__import__("os").environ):
         if var.startswith("IDP_"):

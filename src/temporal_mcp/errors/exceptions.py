@@ -10,6 +10,8 @@ from temporal_mcp.errors.messages import (
     MSG_EXCHANGE,
     MSG_EXCHANGE_WITH_DETAIL,
     MSG_INCOMING_AUTH_CONFIG,
+    MSG_INCOMING_AUTH_POLICY_CONFIG,
+    MSG_INCOMING_AUTH_POLICY_DENIED,
     MSG_SCHEDULE_SPEC_REQUIRED,
     MSG_UNKNOWN_STATUS,
 )
@@ -99,3 +101,24 @@ class IncomingAuthConfigError(TemporalMcpError):
         super().__init__(MSG_INCOMING_AUTH_CONFIG.format(mode=mode, missing=missing))
         self.mode = mode
         self.missing = missing
+
+
+class IncomingAuthPolicyConfigError(TemporalMcpError):
+    """Raised when the incoming claim policy is invalid."""
+
+    def __init__(self, detail: str) -> None:
+        """Initialize with the invalid policy detail.
+
+        Args:
+            detail: Human-readable policy validation failure.
+        """
+        super().__init__(MSG_INCOMING_AUTH_POLICY_CONFIG.format(detail=detail))
+        self.detail = detail
+
+
+class IncomingAuthPolicyDeniedError(TemporalMcpError):
+    """Raised when a valid incoming token fails the claim policy."""
+
+    def __init__(self) -> None:
+        """Initialize with the fixed claim-policy denial message."""
+        super().__init__(MSG_INCOMING_AUTH_POLICY_DENIED)

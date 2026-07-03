@@ -112,14 +112,14 @@ environment variables at runtime.
 Release images are published to GitHub Container Registry:
 
 ```bash
-docker pull ghcr.io/andreeyka/temporal-mcp:v0.1.0
+docker pull ghcr.io/andreeyka/temporal-mcp:v0.1.1
 ```
 
 The release workflow publishes immutable SemVer tags from git tags:
 
 | Git tag | Image tags |
 | --- | --- |
-| `v0.1.0` | `v0.1.0`, `0.1.0`, `0.1` |
+| `v0.1.1` | `v0.1.1`, `0.1.1`, `0.1` |
 
 The project does not publish `latest`. Pin a concrete version tag in Kubernetes.
 
@@ -129,11 +129,11 @@ Keep `pyproject.toml` and the git tag aligned:
 
 ```bash
 uv run python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])"
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.1.1
+git push origin v0.1.1
 ```
 
-The tag push builds and publishes `ghcr.io/andreeyka/temporal-mcp:v0.1.0`.
+The tag push builds and publishes `ghcr.io/andreeyka/temporal-mcp:v0.1.1`.
 
 ## Kubernetes
 
@@ -220,6 +220,7 @@ Settings are loaded from the environment (or a `.env` file) via `pydantic-settin
 | `MCP_READ_ONLY` | `false` | Expose only read-only tools |
 | `MCP_TOOL_SEARCH` | `true` | Expose tools via BM25 `search_tools`/`call_tool`; `false` lists the full catalog |
 | `MCP_AUTH_MODE` | `none` | Incoming auth: `none` or `keycloak` (client-initiated SSO via RFC 9728) |
+| `MCP_AUTH_CLAIM_EXPR` | _(empty)_ | Optional CEL expression for verified incoming JWT claims, such as Keycloak `groups` |
 
 ### Temporal (`TEMPORAL_*`)
 
@@ -248,6 +249,10 @@ Settings are loaded from the environment (or a `.env` file) via `pydantic-settin
 Auth has two independent boundaries — incoming (who can call this server,
 `MCP_AUTH_*`/`IDP_*`) and outbound (what identity the server presents to
 Temporal, `TEMPORAL_AUTH_MODE`) — that share a common `IDP_*` issuer anchor.
+When `MCP_AUTH_MODE=keycloak`, `MCP_AUTH_CLAIM_EXPR` can further restrict
+access by verified JWT claims after issuer, signature, and audience checks pass.
+Tokens that pass JWT validation but fail this expression receive an MCP
+authorization error instead of being treated as invalid tokens.
 See [`docs/auth/README.md`](docs/auth/README.md) for the full model and a
 decision guide, and the per-mode guides for setup and verification steps:
 

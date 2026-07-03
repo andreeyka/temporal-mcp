@@ -3,6 +3,8 @@
 from temporal_mcp.errors.base import TemporalMcpError, TemporalRpcError
 from temporal_mcp.errors.exceptions import (
     IncomingAuthConfigError,
+    IncomingAuthPolicyConfigError,
+    IncomingAuthPolicyDeniedError,
     InvalidScheduleSpecError,
     MissingAuthVerifierError,
     TemporalAuthError,
@@ -23,6 +25,8 @@ from temporal_mcp.errors.rpc_exceptions import (
 
 __all__ = [
     "IncomingAuthConfigError",
+    "IncomingAuthPolicyConfigError",
+    "IncomingAuthPolicyDeniedError",
     "InvalidScheduleSpecError",
     "MissingAuthVerifierError",
     "TemporalAlreadyExistsError",

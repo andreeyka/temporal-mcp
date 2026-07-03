@@ -109,6 +109,10 @@ class McpServerConfig(BaseSettings):
         description="Require and validate the incoming JWT 'aud' claim in keycloak mode. "
         "Set false only to deliberately run without audience validation (insecure).",
     )
+    auth_claim_expr: str | None = Field(
+        None,
+        description="Optional CEL expression that authorizes incoming JWTs by claims after issuer/audience validation",
+    )
 
     idp: IdpConfig = Field(default_factory=IdpConfig, description="Shared identity-provider anchor")
     temporal: TemporalConfig = Field(default_factory=TemporalConfig, description="Temporal configuration")

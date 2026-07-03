@@ -10,16 +10,18 @@ from typing import TYPE_CHECKING
 
 import truststore
 from fastmcp import FastMCP
+from fastmcp.server.auth.providers.jwt import JWTVerifier
 from fastmcp.server.auth.providers.keycloak import KeycloakAuthProvider
 from fastmcp.server.transforms.search import BM25SearchTransform
 
 from temporal_mcp.config import McpServerConfig, mcp_config
 from temporal_mcp.enums import AuthMode, IncomingAuthMode, TemporalToolTags
 from temporal_mcp.errors import IncomingAuthConfigError, MissingAuthVerifierError
-from temporal_mcp.middleware import TemporalRpcErrorMiddleware
+from temporal_mcp.middleware import ClaimExpressionMiddleware, TemporalRpcErrorMiddleware
 from temporal_mcp.prompts import prompts_mcp
 from temporal_mcp.providers import get_client_pool
 from temporal_mcp.resources import resources_mcp
+from temporal_mcp.services.auth_policy import parse_claim_expression
 from temporal_mcp.tools.activity_tools import temporal_activity_mcp
 from temporal_mcp.tools.batch_tools import temporal_batch_mcp
 from temporal_mcp.tools.failure_tools import temporal_failure_mcp
@@ -37,6 +39,11 @@ from temporal_mcp.tools.workflow_rule_tools import temporal_workflow_rule_mcp
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
+
+    from fastmcp.server.auth.auth import TokenVerifier
+    from fastmcp.server.middleware import Middleware
+
+    from temporal_mcp.services.auth_policy import ClaimExpressionPolicy
 
 
 logger = logging.getLogger(__name__)
@@ -100,14 +107,26 @@ def _build_keycloak_auth(config: McpServerConfig) -> KeycloakAuthProvider:
     if not config.auth_base_url:
         raise IncomingAuthConfigError(config.auth_mode.value, "MCP_AUTH_BASE_URL")
     audience = _resolve_incoming_audience(config)
+    token_verifier = _build_keycloak_token_verifier(issuer, audience)
     # required_scopes=[] intentionally overrides KeycloakAuthProvider's default
     # ["openid"]: the outbound resolver derives the caller subject itself and
     # raises if it is absent, so we do not force an openid scope on callers.
     return KeycloakAuthProvider(
         realm_url=issuer,
         base_url=config.auth_base_url,
-        audience=audience,
         required_scopes=[],
+        token_verifier=token_verifier,
+    )
+
+
+def _build_keycloak_token_verifier(issuer: str, audience: str | None) -> TokenVerifier:
+    """Build the Keycloak JWT verifier."""
+    return JWTVerifier(
+        jwks_uri=f"{issuer.rstrip('/')}/protocol/openid-connect/certs",
+        issuer=issuer,
+        algorithm="RS256",
+        required_scopes=[],
+        audience=audience,
     )
 
 
@@ -133,6 +152,36 @@ def _build_auth(config: McpServerConfig) -> KeycloakAuthProvider | None:
             return _build_keycloak_auth(config)
         case _:
             raise IncomingAuthConfigError(str(config.auth_mode), "MCP_AUTH_MODE")
+
+
+def _build_middleware(config: McpServerConfig) -> list[Middleware]:
+    """Build FastMCP middleware for cross-cutting server behavior."""
+    middleware: list[Middleware] = []
+    policy: ClaimExpressionPolicy | None = None
+    if config.auth_mode == IncomingAuthMode.KEYCLOAK:
+        policy = parse_claim_expression(config.auth_claim_expr)
+        if policy is not None:
+            middleware.append(ClaimExpressionMiddleware(policy))
+    _log_incoming_auth_configuration(config, policy)
+    middleware.append(TemporalRpcErrorMiddleware())
+    return middleware
+
+
+def _log_incoming_auth_configuration(
+    config: McpServerConfig,
+    policy: ClaimExpressionPolicy | None,
+) -> None:
+    """Log the incoming auth policy loaded for this server build."""
+    logger.info(
+        "Incoming MCP auth configured: mode=%s issuer=%r base_url=%r audience=%r require_audience=%s",
+        config.auth_mode.value,
+        config.idp.issuer,
+        config.auth_base_url,
+        config.auth_audience or config.idp.audience,
+        config.auth_require_audience,
+    )
+    if policy is not None:
+        logger.info("Incoming claim expression policy loaded: expression=%r", policy.expression)
 
 
 _PROVIDERS = [
@@ -198,7 +247,7 @@ async def build(config: McpServerConfig = mcp_config) -> FastMCP:
         lifespan=_lifespan,
         transforms=_build_transforms(config),
         providers=_PROVIDERS,
-        middleware=[TemporalRpcErrorMiddleware()],
+        middleware=_build_middleware(config),
     )
     if config.read_only:
         app.disable(tags={TemporalToolTags.MUTATING})

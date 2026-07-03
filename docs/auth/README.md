@@ -19,6 +19,13 @@ both sides. See [Incoming auth / SSO](incoming-sso.md) for the incoming boundary
 | `none` (default) | The server accepts every request unauthenticated. Only safe for local development or when an external layer (gateway/service mesh) already restricts access. |
 | `keycloak` | The server advertises OAuth protected-resource metadata (RFC 9728) and verifies every incoming JWT via FastMCP's `KeycloakAuthProvider`. Requires `IDP_ISSUER`, `MCP_AUTH_BASE_URL`, and `IDP_AUDIENCE` (or `MCP_AUTH_AUDIENCE`). Set `MCP_AUTH_REQUIRE_AUDIENCE=false` to run without `aud` validation — insecure; see [incoming-sso.md](incoming-sso.md). |
 
+When `MCP_AUTH_MODE=keycloak`, set `MCP_AUTH_CLAIM_EXPR` to add an
+authorization check after signature, issuer, and audience validation. This is
+useful for Keycloak group allowlists such as `"Example-Admins" in groups ||
+"Example-Operators" in groups`; it does not replace `aud` validation. A valid
+JWT that fails the expression is rejected at the MCP authorization layer, not as
+an invalid token.
+
 ## Outbound mode matrix
 
 `TEMPORAL_AUTH_MODE` selects how the server authenticates to the Temporal frontend:

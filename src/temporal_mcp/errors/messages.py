@@ -15,6 +15,8 @@ MSG_AUTH_VERIFIER_REQUIRED = (
     "MCP_AUTH_MODE=keycloak (with IDP_ISSUER and MCP_AUTH_BASE_URL) so caller tokens are validated"
 )
 MSG_INCOMING_AUTH_CONFIG = "MCP_AUTH_MODE={mode} requires {missing} to be set"
+MSG_INCOMING_AUTH_POLICY_CONFIG = "MCP_AUTH_CLAIM_EXPR is invalid: {detail}"
+MSG_INCOMING_AUTH_POLICY_DENIED = "Bearer token does not satisfy MCP_AUTH_CLAIM_EXPR"
 MSG_CONNECTION = "Failed to connect to Temporal frontend {host}"
 MSG_CONNECTION_WITH_DETAIL = "Failed to connect to Temporal frontend {host}: {detail}"
 MSG_EXCHANGE = "Token exchange failed"

@@ -1,6 +1,7 @@
 """Tests for the entry-point server build."""
 
 import asyncio
+import logging
 
 import pytest
 
@@ -76,6 +77,38 @@ def test_build_auth_keycloak_allows_no_audience_when_not_required():
     )
     # Deliberate opt-out: builds a provider with aud validation disabled instead of raising.
     assert isinstance(_build_auth(cfg), KeycloakAuthProvider)
+
+
+def test_build_adds_claim_expression_middleware():
+    from fastmcp.server.auth.providers.keycloak import KeycloakAuthProvider
+
+    from temporal_mcp.middleware import ClaimExpressionMiddleware
+
+    cfg = McpServerConfig(
+        auth_mode=IncomingAuthMode.KEYCLOAK,
+        auth_base_url="https://mcp.example.com",
+        auth_audience="temporal-api",
+        auth_claim_expr='"Example-Admins" in groups',
+        idp=IdpConfig(issuer="https://sso.example.com/realms/demo"),
+    )
+    app = asyncio.run(build(cfg))
+    assert isinstance(app.auth, KeycloakAuthProvider)
+    assert any(isinstance(mw, ClaimExpressionMiddleware) for mw in app.middleware)
+
+
+def test_build_logs_incoming_auth_policy(caplog):
+    caplog.set_level(logging.INFO)
+    cfg = McpServerConfig(
+        auth_mode=IncomingAuthMode.KEYCLOAK,
+        auth_base_url="https://mcp.example.com",
+        auth_audience="temporal-api",
+        auth_claim_expr='"Example-Admins" in groups',
+        idp=IdpConfig(issuer="https://sso.example.com/realms/demo"),
+    )
+    asyncio.run(build(cfg))
+    assert "Incoming MCP auth configured" in caplog.text
+    assert "Incoming claim expression policy loaded" in caplog.text
+    assert '"Example-Admins" in groups' in caplog.text
 
 
 def test_build_returns_server():

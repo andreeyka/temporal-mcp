@@ -67,6 +67,36 @@ warning whenever audience validation is disabled. Prefer configuring a Keycloak
 Audience mapper (see [keycloak-setup.md](keycloak-setup.md)) so tokens carry the
 right `aud` and validation can stay on.
 
+## Optional claim authorization
+
+Set `MCP_AUTH_CLAIM_EXPR` to restrict access by claims after a token has
+already passed signature, issuer, and audience validation. The value is a CEL
+expression evaluated against top-level JWT claims. For example, this allows
+callers from either synthetic Keycloak group:
+
+```bash
+MCP_AUTH_CLAIM_EXPR='"Example-Admins" in groups || "Example-Operators" in groups'
+```
+
+Boolean logic and nested claims are supported:
+
+```bash
+MCP_AUTH_CLAIM_EXPR='email_verified == true && "admin" in realm_access.roles'
+```
+
+Top-level claims with CEL-compatible names are exposed directly. Claim names
+that contain characters such as `-` are available through the `claims` map:
+
+```bash
+MCP_AUTH_CLAIM_EXPR='"http://localhost:3000" in claims["allowed-origins"]'
+```
+
+An invalid expression fails startup with `IncomingAuthPolicyConfigError`. A
+valid token whose expression evaluates to `false`, a non-boolean value, or a CEL
+evaluation error is rejected by FastMCP middleware as an MCP authorization
+error. The token is not reported as invalid, so clients should not restart SSO
+only because the claim expression failed.
+
 ## Required claims
 
 When `MCP_AUTH_MODE=keycloak`, the incoming JWT must satisfy:
