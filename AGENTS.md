@@ -104,7 +104,7 @@ async def get_workflow(self, workflow_id: str, namespace: str) -> WorkflowModel:
 
 **Project package:** `temporal_mcp` (src-layout: `src/temporal_mcp/`).
 
-Organize by technical layer (`errors`, `models`, `formatters`, `services`, `providers`, `tools`, `prompts`, `utils`). The whole package is Temporal-specific — do **not** add a `temporal/` subfolder per layer.
+Organize by technical layer (`errors`, `models`, `mappers`, `renderers`, `services`, `providers`, `tools`, `prompts`, `resources`, `utils`).
 
 ```text
 src/temporal_mcp/
@@ -112,11 +112,13 @@ src/temporal_mcp/
 ├── main.py                 # Entry point, FastMCP build and run
 ├── errors/                 # Base error class + domain exceptions + message constants
 ├── models/                 # Pydantic models for Temporal entities
-├── formatters/             # Render models to text/markdown for tool output
+├── mappers/                # Map Temporal SDK/protobuf responses to output models
+├── renderers/              # Render output models as Markdown for tool output
 ├── services/               # Business logic (client pool, auth, domain services)
 ├── providers/              # DI providers (config, client pool, per-domain services)
 ├── tools/                  # MCP tool definitions (FastMCP `@mcp.tool`)
 ├── prompts/                # MCP prompt definitions
+├── resources/              # Read-only MCP resources (cluster/namespace data)
 └── utils/                  # Shared helpers (visibility queries, ...)
 ```
 
