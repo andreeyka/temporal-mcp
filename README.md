@@ -107,21 +107,55 @@ The image runs the `temporal-mcp` console script with `MCP_TRANSPORT=http`,
 `MCP_HOST=0.0.0.0`, and `MCP_PORT=8000` by default. Override configuration with
 environment variables at runtime.
 
+For Docker Compose, copy the example configuration and set `TEMPORAL_HOST` to
+an address reachable from the container:
+
+```bash
+cp env.examples .env
+docker compose up --build -d
+```
+
+Compose reads `.env` for both build variables and runtime settings. Override
+`DOCKER_IMAGE`, `DOCKER_TAG`, `PYTHON_IMAGE`, or `UV_IMAGE` to select the output
+image or build dependencies. `MCP_PUBLISHED_PORT` selects the host port; `MCP_PORT`
+selects the container port. The host binding defaults to loopback.
+
+For a direct build, pass `--build-arg PYTHON_IMAGE=...` and
+`--build-arg UV_IMAGE=...`. The Python base must be Debian-based with Python
+3.12 or newer; the uv image must provide `/uv`. Runtime configuration and credentials are supplied
+with `docker run --env-file .env` or environment variables; rebuilding the image
+is unnecessary when these settings change. The example file supports both
+dotenv and Docker's `--env-file` syntax.
+
+The image runs as UID/GID `10001:10001` and supports a read-only root filesystem
+with writable `/tmp`. `GET /health` returns `{"status":"ok"}` without
+authentication. This probe checks HTTP process availability; it does not check
+Temporal connectivity or permission to access a namespace.
+
 ### Published images
 
 Release images are published to GitHub Container Registry:
 
 ```bash
-docker pull ghcr.io/andreeyka/temporal-mcp:v0.1.1
+docker pull ghcr.io/andreeyka/temporal-mcp:v0.1.2
 ```
 
-The release workflow publishes immutable SemVer tags from git tags:
+The release workflow publishes version tags from git tags:
 
 | Git tag | Image tags |
 | --- | --- |
-| `v0.1.1` | `v0.1.1`, `0.1.1`, `0.1` |
+| `v0.1.2` | `v0.1.2`, `0.1.2`, `0.1` |
 
-The project does not publish `latest`. Pin a concrete version tag in Kubernetes.
+The project does not publish `latest`. Pin an image digest for immutable
+deployments, or a concrete version tag. The minor tag advances with releases;
+manually rebuilding a release can also update its version tags.
+
+GitHub Actions repository variables `PYTHON_IMAGE`, `UV_IMAGE`, and
+`DOCKER_PLATFORMS` override the build defaults. Platforms default to
+`linux/amd64,linux/arm64`. Pull requests and pushes to `main` build without
+publishing. Release tags publish to GHCR using the repository's `GITHUB_TOKEN`.
+The **Docker** workflow also supports manual runs with an existing `vX.Y.Z`
+tag. Release builds verify that the tag matches `pyproject.toml`.
 
 ### Release procedure
 
@@ -129,16 +163,17 @@ Keep `pyproject.toml` and the git tag aligned:
 
 ```bash
 uv run python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])"
-git tag v0.1.1
-git push origin v0.1.1
+git tag v0.1.2
+git push origin v0.1.2
 ```
 
-The tag push builds and publishes `ghcr.io/andreeyka/temporal-mcp:v0.1.1`.
+The tag push builds and publishes `ghcr.io/andreeyka/temporal-mcp:v0.1.2`.
 
 ## Kubernetes
 
 Configure the container through environment variables. Use a ConfigMap for
-non-secret values and a Secret for credentials.
+non-secret values and a Secret for credentials. Deployment manifests can be
+maintained in a separate repository that pins the published image digest.
 
 ```yaml
 apiVersion: v1
@@ -148,6 +183,9 @@ metadata:
 data:
   MCP_TRANSPORT: http
   MCP_PORT: "8000"
+  MCP_PATH: /mcp
+  MCP_STATELESS_HTTP: "true"
+  MCP_AUDIT_ENABLED: "true"
   MCP_READ_ONLY: "false"
   TEMPORAL_HOST: temporal-frontend.temporal.svc.cluster.local:7233
   TEMPORAL_AUTH_MODE: service
@@ -176,8 +214,16 @@ spec:
     spec:
       containers:
         - name: temporal-mcp
-          image: ghcr.io/andreeyka/temporal-mcp:v0.1.0
+          image: ghcr.io/andreeyka/temporal-mcp:v0.1.2
           imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
           ports:
             - name: http
               containerPort: 8000
@@ -186,6 +232,28 @@ spec:
                 name: temporal-mcp-config
             - secretRef:
                 name: temporal-mcp-secret
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
@@ -203,6 +271,28 @@ spec:
 If the GHCR package is private, add an `imagePullSecrets` entry that references
 a registry credential secret in the target namespace.
 
+The readiness probe above only gates on HTTP availability. Temporal access is
+resolved per request and may depend on the caller's identity. Set resource
+requests and limits for your workload in the deployment repository.
+
+### Tool call audit
+
+Audit logging is enabled by default. The `temporal_mcp.audit` logger writes a
+JSON record to stderr for each tool invocation with `user`, `tool`, `outcome`,
+and `duration_ms`. Arguments, returned data, bearer tokens, and exception
+messages are omitted. The search transform emits a record for the target tool
+and a separate `call_tool` wrapper record with a `target_tool` field.
+
+Identity comes from the verified token's `preferred_username`, then `sub`,
+then client ID. Without authentication, it is `anonymous`. When authentication
+is handled by a reverse proxy, `MCP_AUDIT_TRUSTED_USER_HEADER` can name its user
+header. Enable this only when the proxy overwrites that header and direct
+access to the server is restricted. A verified token takes precedence.
+
+Set `MCP_AUDIT_ENABLED=false` to disable audit records. Audit uses INFO even
+when `MCP_LOG_LEVEL` is higher. Requests rejected before tool dispatch, such
+as invalid HTTP credentials, are covered by HTTP access logs.
+
 ## Configuration
 
 Settings are loaded from the environment (or a `.env` file) via `pydantic-settings`. Copy `env.examples` as a starting point.
@@ -215,6 +305,10 @@ Settings are loaded from the environment (or a `.env` file) via `pydantic-settin
 | `MCP_MASK_ERROR_DETAILS` | `true` | Hide internal error details from clients |
 | `MCP_HOST` | `0.0.0.0` | Bind host |
 | `MCP_PORT` | `8000` | Bind port |
+| `MCP_PATH` | `/mcp` | MCP HTTP endpoint path |
+| `MCP_LOG_LEVEL` | `INFO` | Server log level: DEBUG, INFO, WARNING, ERROR, CRITICAL |
+| `MCP_AUDIT_ENABLED` | `true` | Log tool identity, outcome, and duration |
+| `MCP_AUDIT_TRUSTED_USER_HEADER` | _(empty)_ | Explicitly trusted proxy username header |
 | `MCP_TRANSPORT` | `http` | `http`, `streamable-http`, or `sse` |
 | `MCP_STATELESS_HTTP` | `true` | Stateless HTTP mode |
 | `MCP_READ_ONLY` | `false` | Expose only read-only tools |

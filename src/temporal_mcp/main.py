@@ -14,9 +14,11 @@ from fastmcp.server.auth.providers.jwt import JWTVerifier
 from fastmcp.server.auth.providers.keycloak import KeycloakAuthProvider
 from fastmcp.server.transforms.search import BM25SearchTransform
 
+from temporal_mcp.audit import AuditMiddleware
 from temporal_mcp.config import McpServerConfig, mcp_config
 from temporal_mcp.enums import AuthMode, IncomingAuthMode, TemporalToolTags
 from temporal_mcp.errors import IncomingAuthConfigError, MissingAuthVerifierError
+from temporal_mcp.health import register_health_route
 from temporal_mcp.middleware import ClaimExpressionMiddleware, TemporalRpcErrorMiddleware
 from temporal_mcp.prompts import prompts_mcp
 from temporal_mcp.providers import get_client_pool
@@ -157,6 +159,8 @@ def _build_auth(config: McpServerConfig) -> KeycloakAuthProvider | None:
 def _build_middleware(config: McpServerConfig) -> list[Middleware]:
     """Build FastMCP middleware for cross-cutting server behavior."""
     middleware: list[Middleware] = []
+    if config.audit_enabled:
+        middleware.append(AuditMiddleware(config.audit_trusted_user_header))
     policy: ClaimExpressionPolicy | None = None
     if config.auth_mode == IncomingAuthMode.KEYCLOAK:
         policy = parse_claim_expression(config.auth_claim_expr)
@@ -251,6 +255,7 @@ async def build(config: McpServerConfig = mcp_config) -> FastMCP:
     )
     if config.read_only:
         app.disable(tags={TemporalToolTags.MUTATING})
+    register_health_route(app)
     return app
 
 
@@ -261,6 +266,8 @@ async def run() -> None:
         transport=mcp_config.transport.value,
         host=mcp_config.host,
         port=mcp_config.port,
+        path=mcp_config.path,
+        log_level=mcp_config.log_level,
         stateless_http=mcp_config.stateless_http,
     )
 
@@ -268,9 +275,11 @@ async def run() -> None:
 def main() -> None:
     """Console-script entry point."""
     # Use the OS trust store (macOS Keychain, Windows cert store, Linux system CAs)
-    # so outbound TLS — e.g. the OIDC token endpoint — trusts corporate/private CAs
+    # so outbound TLS trusts additional certificate authorities in the OS store
     # that are not in certifi's bundle. Must run before any SSLContext is created.
     truststore.inject_into_ssl()
+    logging.basicConfig(level=mcp_config.log_level, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    logging.getLogger("temporal_mcp.audit").setLevel(logging.INFO)
 
     with contextlib.suppress(KeyboardInterrupt):
         asyncio.run(run())

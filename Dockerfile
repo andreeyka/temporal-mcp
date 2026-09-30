@@ -1,9 +1,12 @@
 # syntax=docker/dockerfile:1
 
 ARG PYTHON_IMAGE=python:3.12-slim-trixie
+ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.11.26
+
+FROM ${UV_IMAGE} AS uv
 
 FROM ${PYTHON_IMAGE} AS builder
-COPY --from=ghcr.io/astral-sh/uv:0.11.26 /uv /uvx /bin/
+COPY --from=uv /uv /bin/
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_DEFAULT_INDEX=https://pypi.org/simple \
@@ -48,7 +51,7 @@ RUN groupadd --gid 10001 app \
 
 COPY --from=builder --chown=app:app /app/.venv /app/.venv
 
-USER app
+USER 10001:10001
 EXPOSE 8000
 
 CMD ["temporal-mcp"]
