@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -85,7 +87,15 @@ class McpServerConfig(BaseSettings):
     server_name: str = Field(default="temporal-multi-namespace", description="MCP server name")
     mask_error_details: bool = Field(default=True, description="Hide internal error details")
     host: str = Field(default="0.0.0.0", description="Bind host")  # noqa: S104
-    port: int = Field(default=8000, description="Bind port")
+    port: int = Field(default=8000, description="Bind port", ge=1, le=65535)
+    path: str = Field(default="/mcp", description="MCP HTTP endpoint path", pattern=r"^/")
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
+        default="INFO", description="Server log level"
+    )
+    audit_enabled: bool = Field(default=True, description="Log tool identity, outcome, and duration")
+    audit_trusted_user_header: str | None = Field(
+        None, description="Username header sanitized by a trusted proxy; ignored when a verified token is available"
+    )
     transport: TransportType = Field(default=TransportType.HTTP, description="MCP transport")
     stateless_http: bool = Field(default=True, description="Stateless HTTP mode")
     read_only: bool = Field(default=False, description="Expose only read-only tools (hide mutations)")

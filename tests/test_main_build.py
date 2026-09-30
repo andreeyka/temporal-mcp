@@ -158,8 +158,12 @@ def test_run_forwards_stateless_http(monkeypatch):
 
     monkeypatch.setattr(main, "build", _fake_build)
     monkeypatch.setattr(main.mcp_config, "stateless_http", True)
+    monkeypatch.setattr(main.mcp_config, "path", "/temporal/mcp")
+    monkeypatch.setattr(main.mcp_config, "log_level", "WARNING")
     asyncio.run(main.run())
     assert captured.get("stateless_http") is True
+    assert captured.get("path") == "/temporal/mcp"
+    assert captured.get("log_level") == "WARNING"
 
 
 def test_build_registers_rpc_error_middleware():

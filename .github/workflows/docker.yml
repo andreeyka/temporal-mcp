@@ -7,17 +7,24 @@ on:
       - main
     tags:
       - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to rebuild (vX.Y.Z)"
+        required: true
+        type: string
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
 permissions:
   contents: read
 
 concurrency:
-  group: docker-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: docker-${{ github.workflow }}-${{ inputs.tag || github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -32,6 +39,29 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || github.ref }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v8.2.0
+
+      - name: Validate release version
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          uv run --no-project --python 3.12 python - <<'PY'
+          import os
+          import re
+          import sys
+          import tomllib
+          from pathlib import Path
+
+          tag = os.environ["RELEASE_TAG"]
+          version = tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]
+          if not re.fullmatch(r"v\d+\.\d+\.\d+", tag) or tag != f"v{version}":
+              sys.exit(f"Release tag {tag!r} must be v{version}")
+          PY
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -40,7 +70,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Log in to GHCR
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
         uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
@@ -55,19 +85,22 @@ jobs:
           flavor: |
             latest=false
           tags: |
-            type=ref,event=branch
+            type=ref,event=branch,enable=${{ github.event_name == 'push' && startsWith(github.ref, 'refs/heads/') }}
             type=ref,event=pr
-            type=semver,pattern={{raw}}
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{raw}},value=${{ inputs.tag || github.ref_name }}
+            type=semver,pattern={{version}},value=${{ inputs.tag || github.ref_name }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ inputs.tag || github.ref_name }}
 
       - name: Build image
         id: build
         uses: docker/build-push-action@v7
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
-          push: ${{ startsWith(github.ref, 'refs/tags/v') }}
+          platforms: ${{ vars.DOCKER_PLATFORMS || 'linux/amd64,linux/arm64' }}
+          build-args: |
+            PYTHON_IMAGE=${{ vars.PYTHON_IMAGE || 'python:3.12-slim-trixie' }}
+            UV_IMAGE=${{ vars.UV_IMAGE || 'ghcr.io/astral-sh/uv:0.11.26' }}
+          push: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
@@ -77,7 +110,7 @@ jobs:
     name: Publish GitHub release
     runs-on: ubuntu-latest
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
 
@@ -86,7 +119,7 @@ jobs:
         id: release
         shell: bash
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="${RELEASE_TAG#v}"
           major_minor="${version%.*}"
           {
             echo "version=$version"
@@ -99,10 +132,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          TAG_NAME: ${{ github.ref_name }}
+          TAG_NAME: ${{ inputs.tag || github.ref_name }}
           VERSION: ${{ steps.release.outputs.version }}
           MAJOR_MINOR: ${{ steps.release.outputs.major_minor }}
           DIGEST: ${{ needs.build.outputs.digest }}
+          PLATFORMS: ${{ vars.DOCKER_PLATFORMS || 'linux/amd64,linux/arm64' }}
         run: |
           cat > release-notes.md <<EOF
           Container images:
@@ -112,9 +146,7 @@ jobs:
 
           Digest: \`${DIGEST}\`
 
-          Platforms:
-          - linux/amd64
-          - linux/arm64
+          Platforms: ${PLATFORMS}
           EOF
 
           if gh release view "$TAG_NAME" >/dev/null 2>&1; then
