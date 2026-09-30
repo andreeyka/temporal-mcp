@@ -1,5 +1,21 @@
 # Release Notes
 
+## 0.1.3 - 2026-09-30
+
+### Added
+
+- Tool-call audit records with caller identity, tool name, outcome, and duration, including cancelled calls. Arguments, results, tokens, and exception messages are omitted.
+- Optional trusted proxy username header and environment settings for audit logging, MCP endpoint path, and server log level.
+- An unauthenticated `/health` endpoint for HTTP process probes.
+- Docker Compose configuration and configurable Python/uv build images and target platforms.
+- Manual release rebuilds with package-version validation and matching release metadata.
+
+### Changed
+
+- Run the container with numeric UID/GID `10001:10001` and document read-only filesystem support and Kubernetes deployment settings.
+- Make the example environment compatible with Docker env files and leave example SSO settings disabled by default.
+- Update deployment examples to use the `v0.1.3` image.
+
 ## 0.1.2 - 2026-07-04
 
 ### Added
