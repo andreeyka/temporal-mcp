@@ -137,14 +137,14 @@ Temporal connectivity or permission to access a namespace.
 Release images are published to GitHub Container Registry:
 
 ```bash
-docker pull ghcr.io/andreeyka/temporal-mcp:v0.1.2
+docker pull ghcr.io/andreeyka/temporal-mcp:v0.1.3
 ```
 
 The release workflow publishes version tags from git tags:
 
 | Git tag | Image tags |
 | --- | --- |
-| `v0.1.2` | `v0.1.2`, `0.1.2`, `0.1` |
+| `v0.1.3` | `v0.1.3`, `0.1.3`, `0.1` |
 
 The project does not publish `latest`. Pin an image digest for immutable
 deployments, or a concrete version tag. The minor tag advances with releases;
@@ -163,11 +163,11 @@ Keep `pyproject.toml` and the git tag aligned:
 
 ```bash
 uv run python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])"
-git tag v0.1.2
-git push origin v0.1.2
+git tag v0.1.3
+git push origin v0.1.3
 ```
 
-The tag push builds and publishes `ghcr.io/andreeyka/temporal-mcp:v0.1.2`.
+The tag push builds and publishes `ghcr.io/andreeyka/temporal-mcp:v0.1.3`.
 
 ## Kubernetes
 
@@ -214,7 +214,7 @@ spec:
     spec:
       containers:
         - name: temporal-mcp
-          image: ghcr.io/andreeyka/temporal-mcp:v0.1.2
+          image: ghcr.io/andreeyka/temporal-mcp:v0.1.3
           imagePullPolicy: IfNotPresent
           securityContext:
             runAsNonRoot: true
